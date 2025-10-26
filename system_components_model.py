@@ -59,6 +59,8 @@ class Engine:
             R = 287.0            # J/(kg·K)
             g = 9.80665          # m/s²
 
+            altitude_m = max(0, altitude_m) # 确保高度不为负
+
             if altitude_m <= 11000:
                 # 对流层
                 T = T0_sea - L * altitude_m
@@ -232,9 +234,9 @@ class Generator:
         Returns:
             所需发动机功率, 热功率
         """
-        if p_electric_out_kw > self.p_rated_kw * 1.2:
+        if p_electric_out_kw > self.p * 1.2:
              print(f"警告: 请求功率 {p_electric_out_kw} kW 超过最大允许功率")
-             p_electric_out_kw = self.p_rated_kw * 1.2
+             p_electric_out_kw = self.p * 1.2
 
         current_eta = self.get_efficiency(p_electric_out_kw)
         
@@ -343,6 +345,189 @@ class Battery:
 
     def get_mass(self):
         return self.mass_pack_kg
+
+
+class Motor:
+    def __init__(self, 
+                 p: float, 
+                 pwr: float = 10.0, 
+                 eta_peak: float = 0.97, 
+                 peak_eta_load_ratio: float = 0.85):
+        """
+        电动机模型
+        Args:
+            p:额定机械输出功率[kW]
+            pwr:功率重量比[kW/kg]
+            eta_peak:峰值效率
+            peak_eta_load_ratio:达到峰值效率时的负载率(相对于额定功率)
+        """
+        self.p = p
+        self.power_density = pwr
+        self.mass_kg = self.p / self.power_density
+        
+        # 确定损耗系数
+        p_peak = self.p * peak_eta_load_ratio
+        p_loss_peak = p_peak * (1 - eta_peak) / eta_peak
+        self._p_loss_fixed = p_loss_peak / 2.0
+        self._k_loss = (p_loss_peak / 2.0) / (p_peak**2) if p_peak > 0 else 0
+
+
+    def get_efficiency(self, p_shaft_out_kw: float) -> float:
+        """
+        根据输出轴功率计算当前工况的效率
+        Args:
+            p_shaft_out_kw:输出轴功率[kW]
+        """
+        if p_shaft_out_kw <= 0:
+            return 0.0
+        
+        # 计算损耗
+        p_loss_variable = self._k_loss * p_shaft_out_kw**2
+        p_loss_total = self._p_loss_fixed + p_loss_variable
+        
+        # 计算效率
+        p_elec_in_kw = p_shaft_out_kw + p_loss_total
+        efficiency = p_shaft_out_kw / p_elec_in_kw if p_elec_in_kw > 0 else 0.0
+        
+        return efficiency
+
+
+    def calculate_performance(self, p_shaft_out_req_kw: float):
+        """
+        计算所需输入电功率和热功率
+        Args:
+            p_shaft_out_req_kw:当前需要的输出轴功率[kW]
+        Returns:
+            所需输入电功率, 热功率
+        """
+        if p_shaft_out_req_kw > self.p * 1.1: # 假设允许10%短时超载
+             print(f"警告: 请求轴功率 {p_shaft_out_req_kw} kW 超过最大允许功率")
+             p_shaft_out_kw = self.p * 1.1
+        else:
+             p_shaft_out_kw = p_shaft_out_req_kw
+        
+        if p_shaft_out_kw <= 0:
+            return 0, 0
+
+        current_eta = self.get_efficiency(p_shaft_out_kw)       
+        p_elec_in_kw = p_shaft_out_kw / current_eta
+        q_rejected_kw = p_elec_in_kw - p_shaft_out_kw
+
+        return p_elec_in_kw, q_rejected_kw
+
+
+    def get_mass(self):
+        return self.mass_kg
+
+
+class DuctedFan:
+    def __init__(self, 
+                 p: float, 
+                 diameter_m: float,
+                 static_thrust_per_kw: float = 80.0,
+                 pwr: float = 8.0):
+        """
+        基于经验数据的涵道风扇宏观模型
+        Args:
+            p:风扇设计的额定输入轴功率[kW]
+            diameter_m:风扇直径 [m]
+            static_thrust_per_kw:单位功率静推力[N/kW]
+            pwr:功率重量比[kW/kg]
+        """
+        self.p_rated_kw = p
+        self.diameter = diameter_m
+        self.static_thrust_per_kw = static_thrust_per_kw
+        
+        self.mass_kg = self.p_rated_kw / pwr # 估算重量
+        self.v_max_effective_ms = 220.0 # 估算最大有效速度
+        self.rho_sea_level = 1.225 # 海平面标准空气密度 [kg/m^3]
+
+
+    @staticmethod
+    def _get_air_density_from_altitude(altitude_m: float) -> float:
+        """
+        根据海拔高度计算空气密度
+        Args:
+            altitude_m:海拔高度[m]
+        Returns:
+            空气密度[kg/m^3]
+        """
+        # 物理常数
+        T0 = 288.15  # 海平面标准温度 [K]
+        P0 = 101325.0 # 海平面标准压力 [Pa]
+        R = 287.058   # 理想气体常数 [J/(kg*K)]
+        g0 = 9.80665  # 标准重力加速度 [m/s^2]
+        L = -0.0065   # 对流层温度梯度 [K/m]
+        h_tropo = 11000.0 # 对流层顶高度 [m]
+
+        altitude_m = max(0, altitude_m) # 确保高度不为负
+
+        if altitude_m <= h_tropo: # 对流层
+            temperature = T0 + L * altitude_m
+            pressure = P0 * (temperature / T0)**(-g0 / (L * R))
+        else: # 平流层下部
+            T_tropo = T0 + L * h_tropo
+            P_tropo = P0 * (T_tropo / T0)**(-g0 / (L * R))
+            temperature = T_tropo
+            h_in_strato = altitude_m - h_tropo
+            pressure = P_tropo * np.exp(-g0 * h_in_strato / (R * temperature))
+            
+        density = pressure / (R * temperature)
+
+        return density
+
+
+    def calculate_required_power(self, thrust_req_N: float, velocity_ms: float, altitude_m: float) -> float:
+        """
+        计算所需的轴功率
+        Args:
+            thrust_req_N:当前需要的推力[N]
+            velocity_ms:飞行速度[m/s]
+            altitude_m:飞行海拔高度[m]
+        Returns:
+            所需轴功率[kW]
+        """
+        # 处理无效的推力请求
+        if thrust_req_N <= 0:
+            return 0.0
+            
+        # 检查物理限制
+        if velocity_ms >= self.v_max_effective_ms:
+            print("飞行速度超过有效速度，无法产生正推力")
+            return 0.0
+
+        # 计算当前工况下的空气密度
+        air_density_kg_m3 = self._get_air_density_from_altitude(altitude_m)
+
+        # 求解功率
+        density_ratio = air_density_kg_m3 / self.rho_sea_level
+        velocity_effect = 1 - (velocity_ms / self.v_max_effective_ms)**2
+        denominator = self.static_thrust_per_kw * density_ratio * velocity_effect
+        
+        if denominator <= 1e-6: # 避免除以零
+            print("无法产生需求推力")
+            return 0.0
+
+        p_shaft_req_kw = thrust_req_N / denominator
+
+        # 检查计算出的功率是否超过额定功率
+        status = 'Nominal'
+        if p_shaft_req_kw > self.p_rated_kw:
+            print("超过额定功率")
+            p_shaft_req_kw = self.p_rated_kw
+            thrust_req_N = p_shaft_req_kw * denominator
+            print(f"实际推力:{thrust_req_N}N")
+
+        return p_shaft_req_kw
+
+
+    def get_mass(self):
+        return self.mass_kg
+
+
+
+
+
 
 
 
