@@ -895,6 +895,3 @@ class WiringSystem:
     def get_mass(self):
         return self.mass_kg
     
-
-
-    # 系统架构我计划采用串联式架构，因此重点在飞行约束的建立
