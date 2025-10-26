@@ -248,7 +248,7 @@ class Generator:
              print(f"警告: 请求功率 {p_electric_out_kw} kW 超过最大允许功率")
              p_electric_out_kw = self.p * 1.2
 
-        current_eta = self.get_efficiency(p_electric_out_kw)
+        current_eta = self._get_efficiency(p_electric_out_kw)
         
         if current_eta == 0:
             p_mech_in_kw = 0
