@@ -815,9 +815,9 @@ class DCDCConverter:
         self.mass_kg = self.p_rated_kw / self.power_density
 
 
-    def calculate_performance(self, p_req_kw: float, direction: str):
+    def calculate_performance_forward(self, p_req_kw: float, direction: str):
         """
-        计算性能
+        正向计算性能
         Args:
             p_req_kw: 输入功率[kW]
             direction: 'discharge'(从电池到母线)或'charge'(从母线到电池)
@@ -837,6 +837,35 @@ class DCDCConverter:
             p_to_batt_kw = p_from_bus_kw * self.eta_buck
             q_rejected_kw = p_from_bus_kw * (1 - self.eta_buck)
             return p_to_batt_kw, q_rejected_kw
+        
+        else:
+            raise ValueError("Direction must be 'discharge' or 'charge'")
+        
+    
+    def calculate_performance_inverse(self, p_out_kw: float, direction: str):
+        """
+        逆向计算性能
+        Args:
+            p_out_kw: 输出功率[kW]
+            direction: 'discharge'(从电池到母线)或'charge'(从母线到电池)
+        Returns:
+            输入功率[kW], 热功率[kW]
+        """
+        if direction.lower() == 'discharge':
+            # 母线产生p_out_kw,计算电池提供多少
+            p_to_bus_kw = p_out_kw
+            p_from_batt_kw = p_to_bus_kw / self.eta_boost
+            q_rejected_kw = p_from_batt_kw - p_to_bus_kw
+
+            return p_from_batt_kw, q_rejected_kw
+        
+        elif direction.lower() == 'charge':
+            # 电池充入p_out_kw,计算母线提供多少
+            p_to_batt_kw = p_out_kw
+            p_from_bus_kw = p_to_batt_kw / self.eta_buck
+            q_rejected_kw = p_from_bus_kw - p_to_batt_kw
+
+            return p_from_bus_kw, q_rejected_kw
         
         else:
             raise ValueError("Direction must be 'discharge' or 'charge'")
