@@ -1,5 +1,4 @@
 import math
-import numpy as np
 
 
 from utils import isa_atmosphere

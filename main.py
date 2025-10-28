@@ -1,4 +1,4 @@
-from mission_profile import Aircraft
+from aircraft import Aircraft
 
 if __name__ == "__main__":
     m1 = 0
