@@ -5,7 +5,6 @@ if __name__ == "__main__":
     m2 = 10000
     tms = []
     while abs(m1-m2) > 0.001:
-        print(f"{m2}")
         m1 = m2
         air = Aircraft(m1)
         m2 = air.run()
