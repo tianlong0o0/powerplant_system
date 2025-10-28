@@ -16,16 +16,11 @@ class PowerSystem:
         # 动力系统组件实例化
         # 核心发电机组(Gas Power Units - GPUs)
         self.gpu_a = {
-            'engine': Engine(p=1600, pwr=7),
-            'generators': [Generator(p=800), Generator(p=800)],
-            'rectifiers': [Rectifier(p=800), Rectifier(p=800)]
+            'engine': Engine(p=1200, pwr=7),
+            'generators': [Generator(p=600), Generator(p=600)],
+            'rectifiers': [Rectifier(p_rated_kw=600), Rectifier(p_rated_kw=600)]
         }
-        self.gpu_b = {
-            'engine': Engine(p=1600, pwr=7),
-            'generators': [Generator(p=800), Generator(p=800)],
-            'rectifiers': [Rectifier(p=800), Rectifier(p=800)]
-        }
-        self.gpus = [self.gpu_a, self.gpu_b]
+        self.gpus = [self.gpu_a]
 
         # 储能系统(Energy Storage System - ESS)
         self.ess = {
@@ -34,22 +29,22 @@ class PowerSystem:
         }
 
         # 分布式推进单元(Propulsor Pods)
-        self.num_propulsors = 6
+        self.num_propulsors = 4
         self.propulsors = []
         for i in range(self.num_propulsors):
             pod = {
-                'fan': DuctedFan(p=600, diameter_m=2),
-                'motor': Motor(p=600),
-                'inverter': Inverter(p=600)
+                'fan': DuctedFan(p=400, diameter_m=2),
+                'motor': Motor(p=400),
+                'inverter': Inverter(p_rated_kw=400)
             }
             self.propulsors.append(pod)
 
         # 电网和热管理系统(Common Systems)
-        self.wiring = WiringSystem(p_rated_kw=3600, length_m=50, voltage_v=1000)
+        self.wiring = WiringSystem(p_rated_kw=1600, length_m=50, voltage_v=1000)
         self.tms = ThermalManagementSystem(q_design_kw=500)
 
         # 动力系统参数
-        self.mass = self._calculate_total_mass() # 动力系统的总重量[kg]
+        self._calculate_total_mass() # 计算动力系统的总重量[kg]
         self.battery_soc = self.ess['battery'].soc
         self.fuel_consumption = 0.0 # [kg]
         self.fuel_flow_rate = 0.0 # [kg/s]
