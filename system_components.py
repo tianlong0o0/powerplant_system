@@ -208,7 +208,7 @@ class Generator:
             所需发动机输入功率[kW], 热功率[kW]
         """
         if p_electric_out_kw > self.p * 1.2:
-             print(f"警告: 请求功率 {p_electric_out_kw} kW 超过最大允许功率")
+             print(f"警告: 请求发电机功率 {p_electric_out_kw} kW 超过最大允许功率")
              p_electric_out_kw = self.p * 1.2
 
         current_eta = self._get_efficiency(p_electric_out_kw)
@@ -492,7 +492,7 @@ class DuctedFan:
     def __init__(self, 
                  p: float, 
                  diameter_m: float,
-                 static_thrust_per_kw: float = 80.0,
+                 static_thrust_per_kw: float = 40.0,
                  pwr: float = 8.0):
         """
         基于经验数据的涵道风扇宏观模型
@@ -511,6 +511,19 @@ class DuctedFan:
         self.rho_sea_level = 1.225 # 海平面标准空气密度 [kg/m^3]
 
 
+    def get_propulsive_efficiency(self, velocity_ms: float) -> float:
+        """
+        估算推进效率随速度变化的函数
+        """
+        if velocity_ms < 1e-6:
+            return 0.0
+        
+        max_efficiency = 0.85
+        efficiency = max_efficiency * (1 - math.exp(-0.04 * velocity_ms))
+        
+        return min(efficiency, max_efficiency)
+
+
     def calculate_performance_inverse(self, thrust_req_N: float, velocity_ms: float, altitude_m: float) -> float:
         """
         计算所需的轴功率
@@ -525,34 +538,25 @@ class DuctedFan:
         if thrust_req_N <= 0:
             return 0.0
             
-        # 检查物理限制
-        if velocity_ms >= self.v_max_effective_ms:
-            print("飞行速度超过有效速度，无法产生正推力")
-            return 0.0
-
-        # 计算当前工况下的空气密度
-        _, _, air_density_kg_m3 = isa_atmosphere(altitude_m)
-
-        # 求解功率
-        density_ratio = air_density_kg_m3 / self.rho_sea_level
-        velocity_effect = 1 - (velocity_ms / self.v_max_effective_ms)**2
-        denominator = self.static_thrust_per_kw * density_ratio * velocity_effect
+        # 静态或极低速
+        if velocity_ms < 10.0:
+            p_shaft_req_kw = thrust_req_N / self.static_thrust_per_kw
         
-        if denominator <= 1e-6: # 避免除以零
-            print("无法产生需求推力")
-            return 0.0
-
-        p_shaft_req_kw = thrust_req_N / denominator
-
+        # 飞行中
+        else:
+            thrust_power_kw = (thrust_req_N * velocity_ms) / 1000.0
+            propulsive_efficiency = self.get_propulsive_efficiency(velocity_ms)
+            p_shaft_req_kw = thrust_power_kw / propulsive_efficiency
+        
         # 检查计算出的功率是否超过额定功率
         if p_shaft_req_kw > self.p_rated_kw:
             print("超过额定功率")
             p_shaft_req_kw = self.p_rated_kw
-            thrust_req_N = p_shaft_req_kw * denominator
             print(f"实际推力:{thrust_req_N}N")
-
+            
         return p_shaft_req_kw
-    
+
+
 
     def calculate_performance_forward(self, p_shaft_kw: float, velocity_ms: float, altitude_m: float) -> float:
         """

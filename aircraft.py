@@ -258,5 +258,5 @@ class Aircraft:
             self.total_fuel_burned += fuel_burned_kg
             self._update_mass(fuel_burned_kg)
 
-        return 3500 + math.pow(self.m0, 0.94) * 0.743 + self.total_fuel_burned / 0.94 + self.power_system.get_mass()
+        return 3500 + math.pow(self.m0, 0.94) * 0.743 + self.total_fuel_burned / 0.94
 

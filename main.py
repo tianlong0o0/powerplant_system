@@ -2,7 +2,7 @@ from aircraft import Aircraft
 
 if __name__ == "__main__":
     m1 = 0
-    m2 = 10000
+    m2 = 8000
     tms = []
     while abs(m1-m2) > 0.001:
         m1 = m2

@@ -16,9 +16,9 @@ class PowerSystem:
         # 动力系统组件实例化
         # 核心发电机组(Gas Power Units - GPUs)
         self.gpu_a = {
-            'engine': Engine(p=1200, pwr=7),
-            'generators': [Generator(p=600), Generator(p=600)],
-            'rectifiers': [Rectifier(p_rated_kw=600), Rectifier(p_rated_kw=600)]
+            'engine': Engine(p=1600, pwr=7),
+            'generators': [Generator(p=800), Generator(p=800)],
+            'rectifiers': [Rectifier(p_rated_kw=800), Rectifier(p_rated_kw=800)]
         }
         self.gpus = [self.gpu_a]
 
